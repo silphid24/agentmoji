@@ -54,3 +54,9 @@ python-dotenv==1.0.1
 mcp==1.0.0
 monday-api-python-sdk
 graphql-core>=3.2.0
+
+# MCP System Dependencies
+PyYAML==6.0.1               # YAML 설정 파일 파싱
+watchdog==4.0.1             # 파일 변경 감지 (핫 리로드)
+websockets==12.0            # WebSocket MCP 서버 지원
+dataclasses-json==0.6.7     # 데이터클래스 JSON 직렬화

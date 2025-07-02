@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     mcp_monday_enabled: bool = Field(default=False, env="MCP_MONDAY_ENABLED")
     mcp_monday_server_url: str = Field(default="localhost:3001", env="MCP_MONDAY_SERVER_URL")
     
+    # MCP System Configuration
+    mcp_enabled: bool = Field(default=True, env="MCP_ENABLED")
+    mcp_config_path: Optional[str] = Field(default=None, env="MCP_CONFIG_PATH")
+    mcp_auto_discovery: bool = Field(default=True, env="MCP_AUTO_DISCOVERY")
+    mcp_cache_ttl: int = Field(default=300, env="MCP_CACHE_TTL")  # 5분
+    mcp_max_servers: int = Field(default=10, env="MCP_MAX_SERVERS")
+    mcp_health_check_interval: int = Field(default=60, env="MCP_HEALTH_CHECK_INTERVAL")  # 1분
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

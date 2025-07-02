@@ -1,0 +1,213 @@
+# MCP 서버 설정 파일
+# Config 파일 기반 MCP 서버 통합 시스템
+
+version: "1.0"
+
+# 전역 설정
+global_config:
+  enabled: true                    # MCP 시스템 활성화
+  max_servers: 10                  # 최대 서버 수
+  auto_discovery: true             # 자동 서버 발견
+  log_level: "INFO"               # 로그 레벨
+  tool_cache_ttl: 300             # 도구 캐시 TTL (초)
+  tool_cache_size: 1000           # 도구 캐시 크기
+  allow_insecure_connections: false # 비보안 연결 허용
+  validate_ssl: true              # SSL 검증
+
+# MCP 서버 목록
+servers:
+  # Monday.com MCP 서버 (기존 구현 활용)
+  - name: "monday"
+    display_name: "Monday.com 프로젝트 관리"
+    description: "Monday.com API를 통한 프로젝트 관리 도구"
+    version: "1.0.0"
+    type: "custom"
+    enabled: true
+    auto_start: true
+    
+    # 연결 설정
+    connection:
+      timeout: 30
+      max_retries: 3
+      retry_interval: 5
+    
+    # 인증 설정 (환경변수에서 읽음)
+    auth:
+      type: "api_key"
+      env_var: "MONDAY_API_KEY"  # 환경변수명
+    
+    # 사용자 정의 메타데이터
+    metadata:
+      custom_type: "monday"
+      workspace_id: "${MONDAY_WORKSPACE_ID}"
+      default_board_id: "${MONDAY_DEFAULT_BOARD_ID}"
+    
+    # 도구 설정
+    tools:
+      - name: "get_project_summary"
+        enabled: true
+        description: "프로젝트 요약 정보 가져오기"
+        category: "project_management"
+        agent_types: ["general", "project_manager"]
+      
+      - name: "create_item"
+        enabled: true
+        description: "새로운 프로젝트 아이템 생성"
+        category: "project_management"
+        agent_types: ["general", "project_manager"]
+      
+      - name: "update_item"
+        enabled: true
+        description: "기존 아이템 업데이트"
+        category: "project_management"
+        agent_types: ["general", "project_manager"]
+      
+      - name: "delete_item"
+        enabled: true
+        description: "아이템 삭제"
+        category: "project_management"
+        agent_types: ["project_manager"]
+      
+      - name: "search_items"
+        enabled: true
+        description: "아이템 검색"
+        category: "project_management"
+        agent_types: ["general", "project_manager"]
+      
+      - name: "get_board_details"
+        enabled: true
+        description: "보드 상세 정보 조회"
+        category: "project_management"
+        agent_types: ["general", "project_manager"]
+    
+    # 상태 점검 설정
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 10
+      failure_threshold: 3
+    
+    # 태그
+    tags: ["project_management", "monday", "productivity"]
+
+  # 예시: 외부 FastMCP 서버
+  - name: "example_fastmcp"
+    display_name: "예시 FastMCP 서버"
+    description: "외부 FastMCP 서버 예시"
+    version: "1.0.0"
+    type: "fastmcp"
+    enabled: false  # 기본적으로 비활성화
+    auto_start: false
+    
+    # 연결 설정 (STDIO)
+    connection:
+      command: ["python", "-m", "example_mcp_server"]
+      timeout: 30
+      max_retries: 3
+      retry_interval: 5
+    
+    # 인증 설정
+    auth:
+      type: "api_key"
+      env_var: "EXAMPLE_MCP_API_KEY"
+    
+    # 상태 점검 설정
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 10
+      failure_threshold: 3
+    
+    # 태그
+    tags: ["example", "external"]
+
+  # 예시: HTTP MCP 서버
+  - name: "example_http"
+    display_name: "예시 HTTP MCP 서버"
+    description: "HTTP를 통한 MCP 서버 예시"
+    version: "1.0.0"
+    type: "http"
+    enabled: false  # 기본적으로 비활성화
+    auto_start: false
+    
+    # 연결 설정
+    connection:
+      host: "localhost"
+      port: 8080
+      # 또는 전체 URL 사용:
+      # url: "http://localhost:8080"
+      timeout: 30
+      max_retries: 3
+      retry_interval: 5
+    
+    # 인증 설정
+    auth:
+      type: "bearer"
+      env_var: "HTTP_MCP_TOKEN"
+      headers:
+        "X-Custom-Header": "value"
+    
+    # 상태 점검 설정
+    health_check:
+      enabled: true
+      interval: 60
+      endpoint: "/health"
+      timeout: 10
+      failure_threshold: 3
+    
+    # 태그
+    tags: ["example", "http"]
+
+  # 예시: WebSocket MCP 서버
+  - name: "example_websocket"
+    display_name: "예시 WebSocket MCP 서버"
+    description: "WebSocket을 통한 MCP 서버 예시"
+    version: "1.0.0"
+    type: "websocket"
+    enabled: false  # 기본적으로 비활성화
+    auto_start: false
+    
+    # 연결 설정
+    connection:
+      url: "ws://localhost:8081/mcp"
+      timeout: 30
+      max_retries: 3
+      retry_interval: 5
+    
+    # 인증 설정
+    auth:
+      type: "api_key"
+      api_key: "${WEBSOCKET_MCP_KEY}"
+    
+    # 상태 점검 설정
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 10
+      failure_threshold: 3
+    
+    # 태그
+    tags: ["example", "websocket"]
+
+# 설정 파일 사용법:
+#
+# 1. 환경변수 사용:
+#    - ${ENV_VAR_NAME} 형식으로 환경변수 참조
+#    - 예: api_key: "${MONDAY_API_KEY}"
+#
+# 2. 서버 활성화:
+#    - enabled: true로 설정
+#    - auto_start: true로 설정하면 앱 시작 시 자동 시작
+#
+# 3. 도구 필터링:
+#    - tools 섹션에서 개별 도구 활성화/비활성화
+#    - agent_types로 특정 에이전트에서만 사용 가능하도록 제한
+#
+# 4. 새 서버 추가:
+#    - servers 배열에 새 서버 설정 추가
+#    - name은 고유해야 함
+#    - type에 따라 connection 설정이 달라짐
+#
+# 5. 핫 리로드:
+#    - 파일 변경 시 자동으로 설정이 다시 로드됨
+#    - 서버 재시작 없이 설정 변경 가능
