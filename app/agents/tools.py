@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 
 from app.core.logging import logger
+from app.core.config import settings
 
 
 class CalculatorInput(BaseModel):
@@ -57,6 +58,32 @@ def search_func(query: str, limit: int = 5) -> str:
     return json.dumps(results, indent=2)
 
 
+# Import Monday.com tools conditionally
+MONDAY_TOOLS = {}
+if settings.mcp_monday_enabled and settings.monday_api_key:
+    try:
+        from app.tools.monday.monday_tools import (
+            MondayProjectSummaryTool,
+            MondayCreateItemTool,
+            MondayUpdateItemTool,
+            MondayDeleteItemTool,
+            MondaySearchTool,
+            MondayBoardDetailsTool
+        )
+        
+        MONDAY_TOOLS = {
+            "monday_project_summary": MondayProjectSummaryTool(),
+            "monday_create_item": MondayCreateItemTool(),
+            "monday_update_item": MondayUpdateItemTool(),
+            "monday_delete_item": MondayDeleteItemTool(),
+            "monday_search": MondaySearchTool(),
+            "monday_board_details": MondayBoardDetailsTool()
+        }
+        logger.info("Monday.com tools loaded successfully")
+    except Exception as e:
+        logger.warning(f"Failed to load Monday.com tools: {e}")
+
+
 # Define available tools
 AVAILABLE_TOOLS = {
     "calculator": Tool(
@@ -75,7 +102,9 @@ AVAILABLE_TOOLS = {
         name="Search",
         func=search_func,
         description="Search for information. Provide a query and optional result limit."
-    )
+    ),
+    
+    **MONDAY_TOOLS  # Add Monday.com tools if available
 }
 
 
@@ -109,12 +138,24 @@ class ToolRegistry:
     def get_tools_for_agent(self, agent_type: str) -> list[BaseTool]:
         """Get appropriate tools for agent type"""
         # Define tool sets for different agent types
+        monday_tools = []
+        if settings.mcp_monday_enabled and settings.monday_api_key:
+            monday_tools = [
+                "monday_project_summary", 
+                "monday_create_item", 
+                "monday_update_item", 
+                "monday_delete_item", 
+                "monday_search", 
+                "monday_board_details"
+            ]
+        
         tool_sets = {
-            "general": ["calculator", "datetime"],
-            "task": ["calculator", "datetime", "search"],
-            "knowledge": ["search", "datetime"],
-            "technical": ["calculator", "search"],
-            "creative": ["search"]
+            "general": ["calculator", "datetime"] + monday_tools,
+            "task": ["calculator", "datetime", "search"] + monday_tools,
+            "knowledge": ["search", "datetime"] + monday_tools,
+            "technical": ["calculator", "search"] + monday_tools,
+            "creative": ["search"] + monday_tools,
+            "project_manager": ["datetime", "search"] + monday_tools  # New agent type for project management
         }
         
         tool_names = tool_sets.get(agent_type, ["datetime"])

@@ -104,10 +104,12 @@ class WebChatAdapter(BaseAdapter):
             )
         
         # Send welcome message
+        print(f"[WebChat] Sending welcome message to {user_id}")
         await self._send_system_message(
             connection,
             "Welcome to MOJI Web Chat! How can I help you today?"
         )
+        print(f"[WebChat] Welcome message sent")
         
         try:
             # Handle incoming messages
@@ -115,9 +117,36 @@ class WebChatAdapter(BaseAdapter):
                 data = await websocket.receive_json()
                 message = await self._process_incoming_message(data, connection)
                 
-                # Process message with LLM router
+                # Process message with conversation agent
                 if message.text and message.text.strip():
                     try:
+                        print(f"[WebChat] Processing message: {message.text}")
+                        # Process with conversation agent if available
+                        if hasattr(self, 'conversation_agent') and self.conversation_agent:
+                            print(f"[WebChat] Using conversation agent")
+                            try:
+                                response_message = await self.conversation_agent.process_message(message)
+                                print(f"[WebChat] Agent response: {response_message}")
+                                if response_message and response_message.text:
+                                    print(f"[WebChat] Sending response: {response_message.text}")
+                                    await connection.send({
+                                        "id": str(uuid.uuid4()),
+                                        "type": "text",
+                                        "text": response_message.text,
+                                        "timestamp": datetime.utcnow().isoformat(),
+                                    })
+                                    continue
+                                else:
+                                    print(f"[WebChat] No valid response from agent")
+                            except Exception as agent_error:
+                                print(f"[WebChat] Conversation agent error: {agent_error}")
+                                import traceback
+                                traceback.print_exc()
+                                # Continue to fallback processing
+                        else:
+                            print(f"[WebChat] No conversation agent available")
+                        
+                        # Fallback to direct processing
                         # Check for RAG commands
                         if message.text.startswith("/rag "):
                             # Handle RAG queries
@@ -277,12 +306,16 @@ class WebChatAdapter(BaseAdapter):
                         traceback.print_exc()
                         await self.handle_error(e)
                         # Send error message to client
-                        await connection.send({
-                            "id": str(uuid.uuid4()),
-                            "type": "system",
-                            "text": f"죄송합니다. 메시지 처리 중 오류가 발생했습니다: {str(e)}",
-                            "timestamp": datetime.utcnow().isoformat(),
-                        })
+                        try:
+                            await connection.send({
+                                "id": str(uuid.uuid4()),
+                                "type": "system",
+                                "text": f"죄송합니다. 메시지 처리 중 오류가 발생했습니다: {str(e)}",
+                                "timestamp": datetime.utcnow().isoformat(),
+                            })
+                        except Exception as send_error:
+                            print(f"[WebChat] Failed to send error message: {send_error}")
+                            # Connection might be broken, let it close naturally
         
         except WebSocketDisconnect:
             # Clean up connection

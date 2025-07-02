@@ -1,8 +1,8 @@
 """Platform adapters for MOJI AI Agent."""
 
 from .base import BaseAdapter, PlatformMessage, MessageType, AttachmentType, Button, Card
-from .teams import TeamsAdapter
-from .kakaotalk import KakaoTalkAdapter
+# from .teams import TeamsAdapter  # Disabled for now - missing botbuilder dependency
+# from .kakaotalk import KakaoTalkAdapter  # Disabled for now
 from .webchat import WebChatAdapter
 
 __all__ = [
@@ -12,7 +12,7 @@ __all__ = [
     "AttachmentType",
     "Button",
     "Card",
-    "TeamsAdapter",
-    "KakaoTalkAdapter",
+    # "TeamsAdapter",  # Disabled for now
+    # "KakaoTalkAdapter",  # Disabled for now
     "WebChatAdapter",
 ]

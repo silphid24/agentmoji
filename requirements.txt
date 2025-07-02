@@ -49,3 +49,8 @@ structlog==24.2.0
 
 # Environment
 python-dotenv==1.0.1
+
+# Monday.com MCP Integration
+mcp==1.0.0
+monday-api-python-sdk
+graphql-core>=3.2.0

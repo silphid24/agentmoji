@@ -5,10 +5,13 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, System
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import LLMChain
 from langchain_core.callbacks import AsyncCallbackHandler
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain.tools import Tool
 
 from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.config import settings
+from app.agents.tools import tool_registry
 
 
 class ChatAgent(BaseAgent):
@@ -29,11 +32,21 @@ class ChatAgent(BaseAgent):
     
     def _get_default_system_prompt(self) -> str:
         """Get default system prompt"""
-        return """You are MOJI, a helpful AI assistant. You are:
+        return """You are MOJI, a helpful AI assistant with access to Monday.com project management tools. You are:
 - Friendly and professional
 - Concise but thorough in your responses
 - Honest about what you know and don't know
 - Respectful of user privacy and preferences
+- Capable of managing Monday.com projects using natural language
+
+You have access to Monday.com tools for:
+- Getting project summaries and status reports
+- Creating new project items
+- Updating existing tasks
+- Searching for specific items
+- Getting detailed board information
+
+When users ask about project management, Monday.com data, or want to create/update tasks, use the appropriate Monday.com tools.
 
 Current context:
 - Application: {app_name}
@@ -52,6 +65,11 @@ Current context:
         # Get LangChain model
         self.llm = await llm_router.get_langchain_model()
         
+        # Get tools for this agent
+        tools = tool_registry.get_tools_for_agent("general")
+        logger.info(f"Chat agent loaded {len(tools)} tools: {[tool.name for tool in tools]}")
+        
+        # Create standard prompt
         prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt.format(
                 app_name=settings.app_name,
@@ -61,12 +79,17 @@ Current context:
             ("human", "{input}")
         ])
         
-        # Create chain
+        # Store tools for later use
+        self.tools = tools
+        
+        # Create simple chain (we'll handle tools manually)
         self.chain = LLMChain(
             llm=self.llm,
             prompt=prompt,
             memory=self.memory
         )
+        
+        logger.info(f"Chat agent initialized with {len(self.tools)} tools")
         
         logger.info(f"Chat agent initialized with LLM: {llm_router.config.provider}")
     
@@ -89,8 +112,8 @@ Current context:
             provider = kwargs.get('provider')
             model = kwargs.get('model')
             
-            # Generate response with optional provider/model override
-            response_content = await self._generate_response(
+            # Generate response with tool support
+            response_content = await self._generate_response_with_tools(
                 last_message.content, 
                 provider=provider, 
                 model=model
@@ -132,6 +155,117 @@ Current context:
         except Exception as e:
             logger.error(f"LLM generation error: {e}")
             return "I apologize, but I encountered an error generating a response."
+    
+    async def _generate_response_with_tools(self, input_text: str, provider: Optional[str] = None, model: Optional[str] = None) -> str:
+        """Generate response with tool support"""
+        # Check if input might require tools
+        tool_keywords = {
+            'monday': ['monday', 'Monday', '프로젝트', '워크스페이스', '보드', '작업', '아이템'],
+            'calculator': ['계산', 'calculate', '+', '-', '*', '/', '더하기', '빼기'],
+            'datetime': ['날짜', '시간', 'date', 'time', '오늘', '지금']
+        }
+        
+        # Detect if we need to use tools
+        should_use_tool = False
+        selected_tool = None
+        
+        for tool_type, keywords in tool_keywords.items():
+            if any(keyword in input_text.lower() for keyword in keywords):
+                should_use_tool = True
+                if tool_type == 'monday':
+                    # Determine which Monday tool to use
+                    if any(word in input_text for word in ['요약', '현황', '상태', 'summary']):
+                        selected_tool = 'monday_project_summary'
+                    elif any(word in input_text for word in ['생성', '만들', 'create', '추가']):
+                        selected_tool = 'monday_create_item'
+                    elif any(word in input_text for word in ['검색', 'search', '찾']):
+                        selected_tool = 'monday_search'
+                    elif any(word in input_text for word in ['보드', 'board', '상세']):
+                        selected_tool = 'monday_board_details'
+                    else:
+                        selected_tool = 'monday_project_summary'  # Default
+                elif tool_type == 'calculator':
+                    selected_tool = 'Calculator'
+                elif tool_type == 'datetime':
+                    selected_tool = 'DateTime'
+                break
+        
+        if should_use_tool and selected_tool and self.tools:
+            # Find and execute the tool
+            for tool in self.tools:
+                if tool.name == selected_tool:
+                    try:
+                        logger.info(f"Using tool: {selected_tool}")
+                        # Execute tool based on type
+                        if selected_tool == 'monday_project_summary':
+                            # Project summary doesn't need parameters
+                            result = tool.run(tool_input={"board_id": None})
+                        elif selected_tool == 'monday_create_item':
+                            # Create item with basic info
+                            result = tool.run(tool_input={
+                                "board_id": settings.monday_default_board_id or "2490066826",
+                                "item_name": "새로운 작업",
+                                "description": input_text
+                            })
+                        elif selected_tool == 'monday_search':
+                            # Search with query
+                            result = tool.run(tool_input={"query": input_text})
+                        elif selected_tool == 'monday_board_details':
+                            # Board details
+                            result = tool.run(tool_input={"board_id": settings.monday_default_board_id or "2490066826"})
+                        elif selected_tool == 'Calculator':
+                            # Calculator tool
+                            result = tool.run(tool_input=input_text)
+                        elif selected_tool == 'DateTime':
+                            # DateTime tool
+                            result = tool.run(tool_input=input_text)
+                        else:
+                            result = tool.run(tool_input=input_text)
+                        
+                        return result
+                    except Exception as e:
+                        logger.error(f"Tool execution error: {e}")
+                        return f"도구 실행 중 오류가 발생했습니다: {str(e)}"
+        
+        # Fallback to regular LLM response
+        return await self._generate_response(input_text, provider, model)
+    
+    async def _generate_agent_response(self, input_text: str, provider: Optional[str] = None, model: Optional[str] = None) -> str:
+        """Generate response using agent executor with tools"""
+        if not self.agent_executor:
+            return "Agent executor is not initialized."
+        
+        try:
+            # If provider/model override is specified, we'll need to handle this differently
+            if provider or model:
+                from app.llm.router import llm_router
+                from langchain_core.messages import HumanMessage
+                
+                # Generate with specific provider/model
+                response = await llm_router.generate(
+                    [HumanMessage(content=input_text)],
+                    provider=provider,
+                    model=model
+                )
+                return response.content
+            else:
+                # Use agent executor with tools
+                try:
+                    response = await self.agent_executor.ainvoke({
+                        "input": input_text,
+                        "history": [],
+                        "agent_scratchpad": []
+                    })
+                    return response.get("output", "No response generated.")
+                except Exception as e:
+                    logger.error(f"Agent executor error: {e}")
+                    # Fallback to direct LLM call
+                    from langchain_core.messages import HumanMessage
+                    response = await self.llm.ainvoke([HumanMessage(content=input_text)])
+                    return response.content
+        except Exception as e:
+            logger.error(f"Agent execution error: {e}")
+            return f"I apologize, but I encountered an error: {str(e)}"
     
     def add_tool(self, tool: Any) -> None:
         """Add a tool to the agent"""

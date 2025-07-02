@@ -43,3 +43,15 @@ def check_rate_limit(key: str = "global") -> None:
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded"
         )
+
+
+def get_current_user() -> dict:
+    """Get current user (placeholder for MVP)"""
+    # TODO: Implement actual user authentication
+    # For now, return a mock user for Monday.com operations
+    return {
+        "id": "mock_user_001",
+        "username": "moji_user",
+        "email": "user@moji.ai",
+        "is_active": True
+    }

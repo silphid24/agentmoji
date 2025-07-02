@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_period: int = 3600  # 1 hour
     
+    # Monday.com Configuration
+    monday_api_key: Optional[str] = Field(default=None, env="MONDAY_API_KEY")
+    monday_workspace_id: Optional[str] = Field(default=None, env="MONDAY_WORKSPACE_ID")
+    monday_default_board_id: Optional[str] = Field(default=None, env="MONDAY_DEFAULT_BOARD_ID")
+    
+    # MCP Configuration
+    mcp_monday_enabled: bool = Field(default=False, env="MCP_MONDAY_ENABLED")
+    mcp_monday_server_url: str = Field(default="localhost:3001", env="MCP_MONDAY_SERVER_URL")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

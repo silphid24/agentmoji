@@ -5,8 +5,9 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from app.adapters import PlatformMessage, MessageType, Button, Card
-from app.llm.router import LLMRouter
+from app.agents.manager import agent_manager
 from app.core.config import settings
+from app.core.logging import logger
 
 
 class ConversationAgent:
@@ -14,13 +15,28 @@ class ConversationAgent:
     
     def __init__(self):
         """Initialize conversation agent."""
-        self.llm_router = LLMRouter()
+        self.agent_manager = agent_manager  # Use singleton instance
         self.conversations: Dict[str, list] = {}
+        self._initialized = False
         
     async def process_message(self, message: PlatformMessage) -> Optional[PlatformMessage]:
         """Process incoming message and generate response."""
         if not message.text:
             return None
+        
+        # Initialize agent manager if needed
+        if not self._initialized:
+            try:
+                if not self.agent_manager.agents:
+                    print("[ConversationAgent] Initializing default agents...")
+                    await self.agent_manager.initialize_default_agents()
+                    print(f"[ConversationAgent] Initialized {len(self.agent_manager.agents)} agents")
+                self._initialized = True
+            except Exception as e:
+                print(f"[ConversationAgent] Failed to initialize agents: {e}")
+                import traceback
+                traceback.print_exc()
+                return self._create_error_response(message, f"Agent initialization failed: {str(e)}")
             
         # Get conversation ID
         conv_id = message.conversation.id if message.conversation else "default"
@@ -40,17 +56,24 @@ class ConversationAgent:
         if message.text.lower().startswith("/"):
             return await self._handle_command(message)
         
-        # Generate response using LLM
+        # Generate response using agent
         try:
-            # Prepare context
-            context = self._prepare_context(conv_id)
+            # Get the default agent (chat_agent with Monday.com tools)
+            print(f"[ConversationAgent] Available agents: {list(self.agent_manager.agents.keys())}")
+            agent = self.agent_manager.get_agent("chat_agent")
+            if not agent:
+                print("[ConversationAgent] Chat agent not found")
+                logger.error("Chat agent not found")
+                return self._create_error_response(message, "Agent not available")
+            print(f"[ConversationAgent] Using agent: {agent.name}")
             
-            # Get response from LLM
-            response_text = await self.llm_router.generate(
-                prompt=message.text,
-                context=context,
-                max_tokens=500
-            )
+            # Process message with agent
+            from langchain_core.messages import HumanMessage
+            print(f"[ConversationAgent] Processing message with agent...")
+            response = await agent.process([HumanMessage(content=message.text)])
+            print(f"[ConversationAgent] Agent response: {response}")
+            response_text = response.content
+            print(f"[ConversationAgent] Response text: {response_text}")
             
             # Add assistant response to history
             self.conversations[conv_id].append({
@@ -70,10 +93,12 @@ class ConversationAgent:
             return response
             
         except Exception as e:
-            print(f"Error processing message: {e}")
+            print(f"[ConversationAgent] Error processing message: {e}")
+            import traceback
+            traceback.print_exc()
             return PlatformMessage(
                 type=MessageType.TEXT,
-                text="죄송합니다. 메시지 처리 중 오류가 발생했습니다.",
+                text=f"죄송합니다. 메시지 처리 중 오류가 발생했습니다: {str(e)}",
                 conversation=message.conversation,
                 reply_to=str(message.id)
             )
@@ -175,3 +200,14 @@ class ConversationAgent:
                 context += f"{role}: {content}\n"
         
         return context
+    
+    def _create_error_response(self, message: PlatformMessage, error_text: str) -> PlatformMessage:
+        """Create error response message."""
+        return PlatformMessage(
+            platform=message.platform,
+            user=message.user,
+            conversation=message.conversation,
+            text=error_text,
+            type=MessageType.TEXT,
+            timestamp=datetime.now()
+        )

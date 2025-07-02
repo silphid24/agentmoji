@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, auth, chat, agents, llm, rag, vectorstore, adapters
+from app.api.v1.endpoints import health, auth, chat, agents, llm, rag, vectorstore, adapters, monday
 
 api_router = APIRouter()
 
@@ -14,3 +14,4 @@ api_router.include_router(llm.router, prefix="/llm", tags=["llm"])
 api_router.include_router(rag.router, prefix="/rag", tags=["rag"])
 api_router.include_router(vectorstore.router, prefix="/vectorstore", tags=["vectorstore"])
 api_router.include_router(adapters.router, prefix="/adapters", tags=["adapters"])
+api_router.include_router(monday.router, prefix="/monday", tags=["monday"])

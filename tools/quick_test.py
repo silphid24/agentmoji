@@ -49,6 +49,7 @@ def start_server():
     print("=" * 50)
     print("서버 주소: http://localhost:8000")
     print("웹챗 주소: http://localhost:8000/static/webchat-test.html")
+    print("웹챗 주소: http://localhost:8000/static/moji-webchat-v2.html")
     print("API 문서: http://localhost:8000/docs")
     print("=" * 50)
     print("\n서버를 중지하려면 Ctrl+C를 누르세요.")
